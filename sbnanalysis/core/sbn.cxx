@@ -14,6 +14,7 @@ int main(int argc, char* argv[]) {
   // Parse command line arguments
   std::vector<char*> processors;
   std::map<unsigned, char*> config_names;
+  int num_groups = 1;
 
   int c;
   unsigned procindex = 0;
@@ -25,6 +26,13 @@ int main(int argc, char* argv[]) {
         break;
       case 'c':
         config_names[procindex-1] = optarg;
+        break;
+      case 'n':
+        num_groups = std::stoi(std::string(optarg));
+        if (num_groups < 1) {
+          fprintf(stderr, "Bad argument to option -n (%i). `num_groups` should be >= 1", num_groups);
+          return 1;
+        }
         break;
       case '?':
         if (optopt == 'c' || optopt == 'm')
@@ -68,19 +76,17 @@ int main(int argc, char* argv[]) {
   assert(!filenames.empty());
 
   // Setup
-  std::vector<core::ProcessorBase*> procs(processors.size());
+  std::vector<core::export_table*> tables(processors.size());
   std::vector<Json::Value*> configs(processors.size());
 
   std::cout << "Configuring... " << std::endl;
-  for (size_t i=0; i<procs.size(); i++) {
-    core::export_table* exp = core::LoadProcessor(processors[i]);
-    procs[i] = exp->create();
+  for (size_t i=0; i<configs.size(); i++) {
     configs[i] = core::LoadConfig(config_names[i]);
   }
 
-  core::ProcessorBlock block;
-  for (int i=0; i<procs.size(); i++) {
-    block.AddProcessor(procs[i], configs[i]);
+  core::ProcessorBlock block(num_groups);
+  for (int i=0; i<tables.size(); i++) {
+    block.AddProcessor(tables[i], configs[i]);
   }
 
   std::cout << "Running... " << std::endl;

@@ -122,6 +122,8 @@ protected:
   */
   void BuildEventTree(gallery::Event& ev);
 
+  unsigned fInstanceID; //!< The instance ID of this processor. Useful when there are multiple instances.
+
   unsigned long fEventIndex;  //!< An incrementing index
   std::string fOutputFilename;  //!< The output filename
   TFile* fOutputFile;  //!< The output ROOT file

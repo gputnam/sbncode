@@ -11,6 +11,7 @@
 
 #include <string>
 #include <vector>
+#include "CTPL/ctpl_stl.h"
 
 namespace Json {
   class Value;
@@ -25,7 +26,7 @@ namespace core {
 class ProcessorBlock {
 public:
   /** Constructor */
-  ProcessorBlock();
+  explicit ProcessorBlock(unsigned n_groups = 0);
 
   /** Destructor */
   virtual ~ProcessorBlock();
@@ -38,7 +39,7 @@ public:
    * \param processor The processor
    * \param config The configuration, if any
    */
-  virtual void AddProcessor(ProcessorBase* processor, Json::Value* config);
+  virtual void AddProcessor(export_table* table, Json::Value* config);
 
   /**
    * Process a set of files.
@@ -51,8 +52,36 @@ public:
   virtual void DeleteProcessors();
 
 protected:
+  /** For multithreaded case -- try dispatching a processor group */
+  bool TryDisptach(ctpl::thread_pool &pool, std::string filename);
+  /** Process a list of files on a specified processor group */
+  void runProcessorGroup(unsigned group_id, std::vector<std::string> &filenames);
+  pid_t runHaddOutput(unsigned proc_id);
+
+
+  typedef std::vector<std::pair<ProcessorBase*, Json::Value*>> ProcessorGroup;
+
+  // number of processor groups
+  unsigned fNGroups;
+
   /** Processors and their configurations. */
-  std::vector<std::pair<ProcessorBase*, Json::Value*> > fProcessors;
+  // each index in the external vector has an instance of each Processor
+  std::vector<ProcessorGroup> fProcessorGroups;
+
+  /** list of output files for each processor */
+  std::vector<std::vector<std::string>> fOutputFiles;
+
+  // final output name for each processor */
+  std::vector<std::string> fOutputFileBase;
+  
+  // Whether each processor group is ready for the next file
+  std::vector<bool> fProcessorGroupReady;
+
+  /** Mutex to guard setting / checking whether processor group is ready */
+  std::mutex fProcessorGroupsMutex;
+  /** wake up controller thread when ready */
+  std::condition_variable fWaitCV;
+
 };
 
 }  // namespace core
