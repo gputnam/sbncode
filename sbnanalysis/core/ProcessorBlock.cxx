@@ -6,9 +6,18 @@
 #include "ProcessorBase.hh"
 #include "ProcessorBlock.hh"
 
+#include <TROOT.h>
+
+
 namespace core {
 
-ProcessorBlock::ProcessorBlock(unsigned n_groups): fNGroups(n_groups), fProcessorGroupReady(n_groups, false) {}
+ProcessorBlock::ProcessorBlock(unsigned n_groups): 
+  fNGroups(n_groups), 
+  fProcessorGroups(n_groups)
+  // only needed in multithreaded case
+  //fProcessorGroupReady(n_groups, true)
+  //fProcessorGroupFileIndexes((n_groups > 1) ? (n_groups: 0))
+  {}
 
 
 ProcessorBlock::~ProcessorBlock() {}
@@ -18,9 +27,17 @@ void ProcessorBlock::AddProcessor(export_table* table,
                                   Json::Value* config) {
   // add the processor to each group
   for (unsigned i = 0; i < fNGroups; i++) {
+    std::cout << "MAKING GROUP" << std::endl;
+    std::cout << "MAKING PROCESSOR FROM TABLE: " << table  << std::endl;
+    auto proc = table->create();
+    std::cout << "COPYING CONFIG" << std::endl;
+    auto conf = new Json::Value(*config); // deep copy
+    std::cout << "PUSHING BACK" << std::endl;
     // copy the config for each individual processor
-    fProcessorGroups[i].push_back({table->create(), new Json::Value(config)});
+    //fProcessorGroups[i].push_back({table->create(), new Json::Value(config)});
+    fProcessorGroups[i].push_back({proc, conf});
     int n_processor = fProcessorGroups[i].size() - 1;
+    std::cout << "Processor " << fProcessorGroups[i][n_processor].first << " in group: " << i << std::endl; 
     // set the ID
     fProcessorGroups[i][n_processor].first->fInstanceID = i;
     // set a slot for the output file name
@@ -31,19 +48,23 @@ void ProcessorBlock::AddProcessor(export_table* table,
 
 }
 
-void ProcessorBlock::runProcessorGroup(unsigned group_id, std::vector<std::string> &filenames) {
-  for (gallery::Event ev(filenames); !ev.atEnd(); ev.next()) {
-    for (auto it : fProcessorGroups[group_id]) {
+void ProcessorBlock::runProcessorGroup(ProcessorGroup &group, std::vector<std::string> filenames, std::mutex &eventAccessMutex) {
+  // take the lock
+  //std::unique_lock<std::mutex> lock(eventAccessMutex);
+  for (gallery::Event ev(filenames, false, 1); !ev.atEnd(); ev.next()) {
+    //lock.unlock();
+    for (auto it : group) {
       it.first->BuildEventTree(ev);
       
       bool accept = it.first->ProcessEvent(ev, it.first->fEvent->truth, *it.first->fReco);
       
       if (accept) {
-      it.first->FillTree();
+        it.first->FillTree();
       }
       
       it.first->EventCleanup();
     }
+    //lock.lock(); 
   }
 }
 
@@ -53,13 +74,13 @@ void ProcessorBlock::ProcessFiles(std::vector<std::string> filenames) {
   for (unsigned group_id = 0; group_id < fProcessorGroups.size(); group_id++) {
     for (unsigned proc_ind = 0; proc_ind < fProcessorGroups[group_id].size(); proc_ind++) {
 
-      auto it = fProcessorGroups[group_id][proc_ind];
-      it.first->Setup(it.second);
+      auto &it = fProcessorGroups[group_id][proc_ind];
+      it.first->Config(it.second);
 
       // if multiple groups, screw with the output file of the processor
       if (fProcessorGroups.size() > 1) { 
         std::string OutputBaseName = it.first->fOutputFilename;
-        std::string thisOutputName = OutputBaseName + "__instance__ " + std::to_string(group_id);
+        std::string thisOutputName = OutputBaseName + "__instance__" + std::to_string(group_id);
 
         // save the names
         fOutputFiles[proc_ind].push_back(thisOutputName);
@@ -75,22 +96,51 @@ void ProcessorBlock::ProcessFiles(std::vector<std::string> filenames) {
 
       }
 
+      it.first->Setup();
       it.first->Initialize(it.second);
     }
   }
 
   // Event loop -- single threaded
-  if (fNGroups == 1) {
+  //if (fNGroups == 1) {
     // single instance for each processor, so no need to worry about multithreading
-    runProcessorGroup(0, filenames);
+  //  runProcessorGroup(fProcessorGroups[0], gallery::Event(filenames));
+  //}
+//  else {
+  if (true) {
+    // Bullshit magic stupid shit
+    ROOT::EnableThreadSafety();
+    unsigned filesPerGroup = filenames.size() / fNGroups + 
+      ((filenames.size() % fNGroups == 0) ? 0 : 1);
+    //std::vector<gallery::Event> events;
+
+    unsigned upper_file = filenames.size();
+    // set up each gallery::Event
+    for (unsigned i = 0; i < fNGroups; i++) {
+      unsigned min_file = i*filesPerGroup;
+      unsigned max_file = std::min(upper_file, (i+1)*filesPerGroup);
+      std::vector<std::string> this_filenames(filenames.begin() + min_file, filenames.begin() + max_file);
+      //events.emplace_back(this_filenames, false);
+      fProcessorThreads.emplace_back(runProcessorGroup, std::ref(fProcessorGroups[i]), std::move(this_filenames), std::ref(feventAccessMutex));
+      //runProcessorGroup(std::ref(fProcessorGroups[i]), std::move(this_filenames), std::ref(feventAccessMutex));
+    }
+
+    // wait for all the threads
+    for (auto &thread: fProcessorThreads) {
+      thread.join();
+    }
   }
-  // Event loop -- multi threaded at the input file level
-  else {
-    // initialize the thread pool -- one for each group
-    ctpl::thread_pool pool(fNGroups);
+
+/*
+    //for (unsigned i = 0; i < fNGroups;  i++) {
+    //  // setup the gallery::Event per Procesor Group
+    //  fGroupEvents.emplace_back(filenames);
+    //  // start each processor group thread
+    //  fProcessorThreads.emplace_back(ProcessorGroupThread);
+    //}
 
     // dispatch each filename to a processor group
-    for (unsigned i = 0; i < filenames.size(); i++) {
+    for (unsigned i = fNGroups; i < filenames.size(); i++) {
       // Try dispatching a file
        
       bool dispatched = false;
@@ -111,6 +161,7 @@ void ProcessorBlock::ProcessFiles(std::vector<std::string> filenames) {
     }
    
   }
+*/
 
   // Finalize
   for (auto &group: fProcessorGroups) {
@@ -135,6 +186,7 @@ void ProcessorBlock::ProcessFiles(std::vector<std::string> filenames) {
 }
 
 // NOTE: Should only be called while holding the fProcessorGroupsMutex lock
+/*
 bool ProcessorBlock::TryDisptach(ctpl::thread_pool &pool, std::string filename) {
   bool dispatched = false;
   // try each processor and push it
@@ -174,7 +226,7 @@ bool ProcessorBlock::TryDisptach(ctpl::thread_pool &pool, std::string filename) 
   }
   return dispatched;
 }
-
+*/
 void ProcessorBlock::DeleteProcessors() {
   for (auto &group: fProcessorGroups) {
     for (auto it : group) {

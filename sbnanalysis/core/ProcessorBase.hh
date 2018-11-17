@@ -103,14 +103,19 @@ protected:
    *
    * \param config A configuration as a JSON filename.
    */
-  virtual void Setup(char* config=NULL);
+  virtual void Config(char* config=NULL);
 
   /**
    * Perform framework-level initialization.
    *
    * \param config A configuration as a JSON object
    */
-  virtual void Setup(Json::Value* config=NULL);
+  virtual void Config(Json::Value* config=NULL);
+
+  /**
+   * Perform framework-level initialization.
+   */
+  virtual void Setup();
 
   /** Perform framework-level finalization. */
   virtual void Teardown();

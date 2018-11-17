@@ -11,7 +11,7 @@
 
 #include <string>
 #include <vector>
-#include "CTPL/ctpl_stl.h"
+#include <thread>
 
 namespace Json {
   class Value;
@@ -52,14 +52,12 @@ public:
   virtual void DeleteProcessors();
 
 protected:
-  /** For multithreaded case -- try dispatching a processor group */
-  bool TryDisptach(ctpl::thread_pool &pool, std::string filename);
-  /** Process a list of files on a specified processor group */
-  void runProcessorGroup(unsigned group_id, std::vector<std::string> &filenames);
-  pid_t runHaddOutput(unsigned proc_id);
-
-
   typedef std::vector<std::pair<ProcessorBase*, Json::Value*>> ProcessorGroup;
+
+  /** For multithreaded case -- try dispatching a processor group */
+  //bool TryDisptach(ctpl::thread_pool &pool, std::string filename);
+  pid_t runHaddOutput(unsigned proc_id);
+  static void runProcessorGroup(ProcessorGroup &group, std::vector<std::string> filelist, std::mutex &eventAccessMutex);
 
   // number of processor groups
   unsigned fNGroups;
@@ -74,13 +72,22 @@ protected:
   // final output name for each processor */
   std::vector<std::string> fOutputFileBase;
   
-  // Whether each processor group is ready for the next file
-  std::vector<bool> fProcessorGroupReady;
+  // Queue of files to be processed by each processor group
+  //std::vector<std::queue<unsigned>> fProcessorGroupFileIndexes;
+  
+  // gallery::Event for each processor group
+  //std::vector<gallery::Event> fGroupEvents;
+
+  // thread for each processor group to operate on
+  std::vector<std::thread> fProcessorThreads;
+
+  std::mutex feventAccessMutex;
 
   /** Mutex to guard setting / checking whether processor group is ready */
-  std::mutex fProcessorGroupsMutex;
+  //std::mutex fProcessorGroupsMutex;
   /** wake up controller thread when ready */
-  std::condition_variable fWaitCV;
+  //std::condition_variable fControllerCV;
+  //std::condition_variable fWorkerCV;
 
 };
 

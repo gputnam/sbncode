@@ -69,6 +69,17 @@ add_custom_command(TARGET sbnanalysis_Event POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
   libsbn_eventdict_rdict.pcm ${CMAKE_INSTALL_PREFIX}/lib)
 
+add_executable(sbn-simple simple.cxx)
+target_link_libraries(
+  sbn-simple
+  sbnanalysis_Processor
+  #sbnanalysis_Event
+  jsoncpp
+  ${LARSIM_BASE_LIBRARY}
+  ${LARSIM_BASE_DICT}
+  ${ROOT_LIBRARIES}
+)
+
 add_executable(sbn sbn.cxx)
 target_link_libraries(
   sbn
@@ -94,6 +105,7 @@ target_link_libraries(
 install(TARGETS sbnanalysis_Event DESTINATION lib)
 install(TARGETS sbnanalysis_Processor DESTINATION lib)
 install(TARGETS sbn DESTINATION bin)
+install(TARGETS sbn-simple DESTINATION bin)
 install(TARGETS sbn-postprocess DESTINATION bin)
 
 if (DEFINED SBNANA_COMPILED_PROCESSOR)

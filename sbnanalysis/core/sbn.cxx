@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
 
   int c;
   unsigned procindex = 0;
-  while ((c=getopt(argc, argv, "m:c:")) != -1) {
+  while ((c=getopt(argc, argv, "m:c:n:")) != -1) {
     switch (c) {
       case 'm':
         processors.push_back(optarg);
@@ -82,6 +82,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Configuring... " << std::endl;
   for (size_t i=0; i<configs.size(); i++) {
     configs[i] = core::LoadConfig(config_names[i]);
+    tables[i] = core::LoadProcessor(processors[i]);
   }
 
   core::ProcessorBlock block(num_groups);

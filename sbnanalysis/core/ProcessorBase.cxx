@@ -42,13 +42,13 @@ void ProcessorBase::Initialize(char* config) {
 }
 
 
-void ProcessorBase::Setup(char* config) {
+void ProcessorBase::Config(char* config) {
   Json::Value* cfg = LoadConfig(config);
-  Setup(cfg);
+  Config(cfg);
 }
 
 
-void ProcessorBase::Setup(Json::Value* config) {
+void ProcessorBase::Config(Json::Value* config) {
   // Load configuration parameters
   //
   // With configuration file provided
@@ -82,7 +82,9 @@ void ProcessorBase::Setup(Json::Value* config) {
     fMCParticleTag = {"largeant"};
     fOutputFilename = "output.root";
   }
+}
 
+void ProcessorBase::Setup() {
   // Open the output file and create the standard event tree
   fOutputFile = TFile::Open(fOutputFilename.c_str(), "recreate");
   fTree = new TTree("sbnana", "SBN Analysis Tree");
