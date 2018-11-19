@@ -14,10 +14,12 @@ int main(int argc, char* argv[]) {
   // Parse command line arguments
   std::vector<char*> processors;
   std::map<unsigned, char*> config_names;
+  int split_index = -1;
+  int split_number = -1;
 
   int c;
   unsigned procindex = 0;
-  while ((c=getopt(argc, argv, "m:c:")) != -1) {
+  while ((c=getopt(argc, argv, "m:c:s:i:")) != -1) {
     switch (c) {
       case 'm':
         processors.push_back(optarg);
@@ -25,6 +27,12 @@ int main(int argc, char* argv[]) {
         break;
       case 'c':
         config_names[procindex-1] = optarg;
+        break;
+      case 's':
+        split_number = std::stoi(std::string(optarg));
+        break;
+      case 'i':
+        split_index = std::stoi(std::string(optarg));
         break;
       case '?':
         if (optopt == 'c' || optopt == 'm')
@@ -40,7 +48,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (argc - optind < 1) {
-    std::cout << "Usage: " << argv[0] << " [-m PROCESSOR [-c CONFIG]] "
+    std::cout << "Usage: " << argv[0] << " [-m PROCESSOR [-c CONFIG]] -s SPLIT_NUMBER -i SPLIT_INDEX"
               << "INPUTDEF [...]" << std::endl;
     return 0;
   }
@@ -50,18 +58,29 @@ int main(int argc, char* argv[]) {
   std::string list_suffix = ".list";
   std::vector<std::string> filenames;
 
+  int file_ind = 0;
   if (std::equal(list_suffix.rbegin(), list_suffix.rend(), filedef.rbegin())) {
     // File list
     std::ifstream infile(filedef);
     std::string filename;
     while (infile >> filename) {
-      filenames.push_back(filename);
+      // Add every file if no split is specified.
+      // If a split is specified, only add the files configured to this index 
+      if ((split_index == -1 || split_number == -1) || (file_ind % split_number) == split_index) {
+        filenames.push_back(filename);
+      }
+      file_ind ++;
     }
   }
   else {
     // Files listed on command line
     for (int i=optind; i<argc; i++) {
-      filenames.push_back(argv[i]);
+      // Add every file if no split is specified.
+      // If a split is specified, only add the files configured to this index 
+      if ((split_index == -1 || split_number == -1) || (file_ind % split_number) == split_index) {
+        filenames.push_back(argv[i]);
+      }
+      file_ind ++;
     }
   }
 
