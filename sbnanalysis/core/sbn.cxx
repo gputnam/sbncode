@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
         split_index = std::stoi(std::string(optarg));
         break;
       case '?':
-        if (optopt == 'c' || optopt == 'm')
+        if (optopt == 'c' || optopt == 'm' || optopt == 's' || optopt == 'i')
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint(optopt))
           fprintf(stderr, "Unknown option `-%c'.\n", optopt);
